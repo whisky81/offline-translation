@@ -1,0 +1,32 @@
+# Template. Dung ./scripts/install.sh de thay __PROJECT_DIR__ va cai vao
+# /etc/systemd/system/libretranslate.service
+[Unit]
+Description=LibreTranslate - may chu dich offline (Web UI + REST API)
+Documentation=https://docs.libretranslate.com
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Buoc dung Docker Engine he thong, KHONG dung socket cua Docker Desktop
+# (Desktop chay theo phien dang nhap GUI nen khong phu hop lam daemon).
+Environment=DOCKER_HOST=unix:///var/run/docker.sock
+# Config Docker CLI rieng cua project: tranh credsStore=desktop va cac hook
+# plugin cua Docker Desktop trong ~/.docker/config.json.
+Environment=DOCKER_CONFIG=__DOCKER_CONFIG__
+WorkingDirectory=__PROJECT_DIR__
+
+ExecStartPre=-/usr/bin/docker compose --project-directory __PROJECT_DIR__ down --remove-orphans
+ExecStart=/usr/bin/docker compose --project-directory __PROJECT_DIR__ up --abort-on-container-exit
+ExecStop=/usr/bin/docker compose --project-directory __PROJECT_DIR__ down
+
+Restart=always
+RestartSec=10
+# Lan khoi dong dau phai tai model, co the lau -> khong dat tran.
+TimeoutStartSec=0
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

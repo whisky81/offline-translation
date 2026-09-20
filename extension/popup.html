@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head><meta charset="utf-8"><link rel="stylesheet" href="ui.css">
+<style>body { width: 330px; }</style></head>
+<body>
+<div class="wrap">
+  <h1><span class="dot" id="health"></span> Dịch offline</h1>
+
+  <p id="pdfbar" hidden style="margin:0 0 10px">
+    <button class="primary" id="openpdf" style="width:100%">
+      Mở PDF này bằng trình đọc có dịch
+    </button>
+  </p>
+
+  <label for="text">Văn bản</label>
+  <textarea id="text" placeholder="Dán hoặc gõ vào đây…"></textarea>
+
+  <div class="row" style="margin-top:8px">
+    <select id="engine" aria-label="Bộ dịch"></select>
+    <select id="target" aria-label="Dịch sang"></select>
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <button class="primary" id="go">Dịch</button>
+    <button id="copy">Chép</button>
+  </div>
+
+  <div class="out" id="out"></div>
+  <p class="status" id="status"></p>
+  <p class="hint">Bôi đen chữ trên trang bất kỳ để hiện nút dịch nhanh, hoặc bấm <b>Alt+T</b>.
+     <a href="#" id="opts">Tuỳ chọn</a></p>
+</div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>

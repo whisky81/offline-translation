@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Dieu khien may chu LibreTranslate.
+#   ./scripts/ltctl <lenh>
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Co lap khoi Docker Desktop (DOCKER_HOST + DOCKER_CONFIG rieng).
+. "$PROJECT_DIR/scripts/_docker-env.sh"
+DC=(docker compose --project-directory "$PROJECT_DIR")
+
+. "$PROJECT_DIR/scripts/_config.sh"
+BASE="$LT_API_URL"
+
+# Uu tien systemd neu unit da duoc cai; neu chua thi thao tac truc tiep bang compose.
+have_unit() { systemctl cat libretranslate.service >/dev/null 2>&1; }
+
+usage() {
+  cat <<USAGE
+ltctl - dieu khien may chu dich LibreTranslate
+
+  start          Khoi dong
+  stop           Dung
+  restart        Khoi dong lai (dung sau khi sua .env)
+  status         Trang thai service + container + suc khoe API
+  logs [-n N]    Xem log (mac dinh theo doi truc tiep)
+  url            In dia chi Web UI / API
+  pull           Keo image moi nhat
+  upgrade        Keo image moi + khoi dong lai
+  update-models  Cap nhat model ngon ngu (can mang)
+  models         Liet ke ngon ngu dang co
+  shell          Mo shell trong container
+  test           Chay toan bo test (them 'api'/'setup'/'web'/'lens' de chay rieng)
+  boot-check     Kiem tra cac cong co tu len lai sau reboot khong
+                 (them --simulate de dien tap that, can sudo)
+  enable         Bat tu chay luc boot
+  disable        Tat tu chay luc boot
+
+Cau hinh: $PROJECT_DIR/.env
+USAGE
+}
+
+cmd=${1:-help}; shift || true
+
+case "$cmd" in
+  start)
+    if have_unit; then sudo systemctl start libretranslate.service; else "${DC[@]}" up -d; fi
+    echo "Da gui lenh khoi dong. Theo doi: $0 logs" ;;
+
+  stop)
+    if have_unit; then sudo systemctl stop libretranslate.service; else "${DC[@]}" down; fi
+    echo "Da dung." ;;
+
+  restart)
+    if have_unit; then sudo systemctl restart libretranslate.service; else "${DC[@]}" down && "${DC[@]}" up -d; fi
+    echo "Da khoi dong lai." ;;
+
+  enable)  sudo systemctl enable libretranslate.service ;;
+  disable) sudo systemctl disable libretranslate.service ;;
+
+  status)
+    echo "=== systemd ==="
+    if have_unit; then
+      systemctl --no-pager --lines=0 status libretranslate.service || true
+    else
+      echo "(unit chua duoc cai - chay: sudo ./scripts/install.sh)"
+    fi
+    echo
+    echo "=== container ==="
+    "${DC[@]}" ps 2>/dev/null || echo "(khong ket noi duoc Docker Engine)"
+    echo
+    echo "=== API ==="
+    if curl -sf --max-time 5 "$BASE/languages" >/dev/null 2>&1; then
+      n=$(curl -sf --max-time 5 "$BASE/languages" | jq 'length')
+      echo "OK - $BASE ($n ngon ngu)"
+    else
+      echo "Chua phan hoi tai $BASE"
+    fi ;;
+
+  logs)
+    if have_unit; then
+      if [ $# -gt 0 ]; then journalctl -u libretranslate "$@" --no-pager
+      else journalctl -u libretranslate -f -n 50; fi
+    else
+      "${DC[@]}" logs -f --tail=50
+    fi ;;
+
+  url)
+    echo "UI tieng Viet   : $LT_WEB_URL/          <- giao dien chinh"
+    echo "UI goc LibreTr. : $LT_API_URL/"
+    echo "Swagger         : $LT_WEB_URL/docs/"
+    echo "API (Argos)     : POST $LT_WEB_URL/api/translate"
+    echo "API (EnViT5)    : POST $LT_WEB_URL/api2/translate" ;;
+
+  pull)    "${DC[@]}" pull ;;
+
+  upgrade)
+    "${DC[@]}" pull
+    if have_unit; then sudo systemctl restart libretranslate.service; else "${DC[@]}" up -d; fi
+    echo "Da nang cap." ;;
+
+  update-models)
+    langs=$(grep -E '^LT_LOAD_ONLY=' "$PROJECT_DIR/.env" | cut -d= -f2)
+    pylist=$(python3 -c "import sys;print([x.strip() for x in sys.argv[1].split(',') if x.strip()])" "$langs")
+    echo "Cap nhat model cho: $langs  (can mang)"
+    was_active=0
+    if have_unit && systemctl is-active --quiet libretranslate.service; then was_active=1; fi
+    if [ "$was_active" -eq 1 ]; then sudo systemctl stop libretranslate.service; fi
+    # Chay mot container tam, dung chung volume model, tai xong thi thoat.
+    "${DC[@]}" run --rm --entrypoint ./venv/bin/python libretranslate \
+      -c "from libretranslate.init import boot; boot($pylist, True, False)"
+    if [ "$was_active" -eq 1 ]; then sudo systemctl start libretranslate.service; fi
+    echo "Xong." ;;
+
+  models)
+    curl -sf --max-time 10 "$BASE/languages" \
+      | jq -r '.[] | "\(.code)\t\(.name)\t-> \(.targets | join(","))"' \
+      | column -t -s$'\t' ;;
+
+  test)   "$PROJECT_DIR/tests/run.sh" "$@" ;;
+
+  boot-check) "$PROJECT_DIR/scripts/verify-boot.sh" "$@" ;;
+
+  shell)  "${DC[@]}" exec libretranslate bash || "${DC[@]}" exec libretranslate sh ;;
+
+  help|-h|--help) usage ;;
+  *) echo "Khong ro lenh: $cmd"; echo; usage; exit 1 ;;
+esac

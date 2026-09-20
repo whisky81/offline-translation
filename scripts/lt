@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Dich nhanh tu dong lenh, goi REST API cua may chu local.
+#
+#   lt "Hello world"                 # tu nhan dien -> tieng Viet
+#   lt -t en "Xin chao"              # dich sang tieng Anh
+#   lt -s en -t ja "Good morning"    # chi ro nguon va dich
+#   echo "text" | lt -t vi           # doc tu stdin
+#   lt --clip                        # dich noi dung clipboard
+#   lt --detect "Bonjour"            # chi nhan dien ngon ngu
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$PROJECT_DIR/scripts/_config.sh"
+BASE="${LT_URL:-$LT_API_URL}"
+
+SRC=auto; TGT=vi; CLIP=0; DETECT=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -s|--source) SRC="$2"; shift 2 ;;
+    -t|--target) TGT="$2"; shift 2 ;;
+    --clip)      CLIP=1; shift ;;
+    --detect)    DETECT=1; shift ;;
+    -h|--help)   sed -n '2,12p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    --)          shift; break ;;
+    -*)          echo "Tham so la: $1" >&2; exit 1 ;;
+    *)           break ;;
+  esac
+done
+
+if [ "$CLIP" -eq 1 ]; then
+  TEXT=$(wl-paste 2>/dev/null || xclip -o -selection clipboard 2>/dev/null)
+elif [ $# -gt 0 ]; then
+  TEXT="$*"
+else
+  TEXT=$(cat)
+fi
+
+[ -n "${TEXT//[[:space:]]/}" ] || { echo "Khong co gi de dich." >&2; exit 1; }
+
+if [ "$DETECT" -eq 1 ]; then
+  jq -n --arg q "$TEXT" '{q:$q}' \
+    | curl -sf --max-time 30 -X POST "$BASE/detect" \
+        -H 'Content-Type: application/json' --data @- \
+    | jq -r '.[] | "\(.language)\t\(.confidence)%"'
+  exit 0
+fi
+
+RESP=$(jq -n --arg q "$TEXT" --arg s "$SRC" --arg t "$TGT" \
+        '{q:$q, source:$s, target:$t, format:"text"}' \
+      | curl -sf --max-time 120 -X POST "$BASE/translate" \
+          -H 'Content-Type: application/json' --data @-) || {
+  echo "Khong goi duoc $BASE — may chu dang chay chua? (./scripts/ltctl status)" >&2
+  exit 1
+}
+
+echo "$RESP" | jq -r '.translatedText'

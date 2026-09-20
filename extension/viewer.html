@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Trình đọc PDF · Dịch offline</title>
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="vendor/pdfjs/textlayer.css">
+<style>
+  body { background: #52565c; margin: 0; }
+  @media (prefers-color-scheme: dark) { body { background: #0b0d10; } }
+  .bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .bar .grow { flex: 1; }
+  .bar .name { font-weight: 550; max-width: 44vw; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+  .pages { padding: 16px 0 40px; display: flex; flex-direction: column;
+           align-items: center; gap: 16px; }
+  .page { position: relative; box-shadow: 0 2px 12px rgba(0,0,0,.35); background: #fff; }
+  .page canvas { display: block; }
+  .tip { padding: 10px 14px; color: var(--muted); font-size: 13px; }
+  .tip.err { color: var(--danger); }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="name" id="name">…</span>
+    <span class="grow"></span>
+    <button class="iconbtn" id="zoomout" title="Thu nhỏ">−</button>
+    <span id="zoom">100%</span>
+    <button class="iconbtn" id="zoomin" title="Phóng to">+</button>
+    <button class="iconbtn" id="whole">Dịch cả tệp</button>
+    <a class="iconbtn" id="orig" target="_blank" rel="noopener">Bản gốc</a>
+  </div>
+  <p class="tip" id="tip">Đang mở…</p>
+  <div class="pages" id="pages"></div>
+
+  <!-- Cung bo script voi content script; nap theo dung thu tu phu thuoc. -->
+  <script src="content/placement.js"></script>
+  <script src="content/selection.js"></script>
+  <script src="content/ui.js"></script>
+  <script src="content/main.js"></script>
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dịch offline</title>
+<meta name="description" content="Dịch ngoại tuyến trên máy, không gửi dữ liệu ra ngoài.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🗣️</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="dot" id="health" title="Trạng thái máy chủ"></span>
+    <h1>Dịch offline</h1>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="theme" title="Đổi nền sáng/tối">Nền</button>
+    <a class="iconbtn" href="/docs/" target="_blank" rel="noopener">API</a>
+  </header>
+
+  <div class="langbar">
+    <label class="visually-hidden" for="engine">Bộ dịch</label>
+    <select id="engine" title="Bộ dịch">
+      <option value="auto">Tự chọn · EnViT5 cho EN↔VI</option>
+      <option value="lt">LibreTranslate · nhanh · mọi cặp</option>
+      <option value="hf">EnViT5 · chất lượng · chỉ EN↔VI</option>
+    </select>
+    <span class="sep" aria-hidden="true"></span>
+    <label class="visually-hidden" for="src">Ngôn ngữ nguồn</label>
+    <select id="src"><option value="auto">Tự nhận diện</option></select>
+    <button class="iconbtn" id="swap" title="Đảo chiều dịch" aria-label="Đảo chiều dịch">⇄</button>
+    <label class="visually-hidden" for="tgt">Ngôn ngữ đích</label>
+    <select id="tgt"></select>
+  </div>
+
+  <div class="panes">
+    <section class="pane" id="inpane">
+      <header>
+        <span>Văn bản gốc</span>
+        <span class="spacer"></span>
+        <button class="iconbtn" id="clear">Xoá</button>
+      </header>
+      <label class="visually-hidden" for="input">Văn bản cần dịch</label>
+      <textarea id="input" placeholder="Gõ hoặc dán văn bản… (cũng có thể thả tệp vào đây)"
+                autofocus spellcheck="false"></textarea>
+      <footer>
+        <span id="count">0 ký tự</span>
+        <span class="spacer"></span>
+        <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> dịch ngay</span>
+      </footer>
+    </section>
+
+    <section class="pane">
+      <header>
+        <span>Bản dịch</span>
+        <span id="detected"></span>
+        <span class="spacer"></span>
+        <button class="iconbtn" id="copy">Chép</button>
+      </header>
+      <div class="out" id="output" data-empty="Bản dịch hiện ở đây." aria-live="polite"></div>
+      <div class="alts" id="alts" hidden></div>
+      <footer>
+        <span id="timing"></span>
+      </footer>
+    </section>
+  </div>
+
+  <p id="status" role="status"></p>
+
+  <details class="more">
+    <summary>Dịch tệp &amp; lịch sử</summary>
+
+    <div class="filerow">
+      <input type="file" id="file">
+      <button class="iconbtn" id="dofile">Dịch tệp</button>
+      <span id="formats" class="chip"></span>
+    </div>
+    <p id="fileout"></p>
+
+    <div class="histhead">
+      <span class="muted" id="histcount"></span>
+      <button class="iconbtn" id="clearhist" data-clear-hist>Xoá lịch sử</button>
+    </div>
+    <div class="hist" id="hist"></div>
+  </details>
+
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

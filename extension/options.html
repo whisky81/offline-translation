@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head><meta charset="utf-8"><title>Tuỳ chọn · Dịch offline</title>
+<link rel="stylesheet" href="ui.css"><style>body{max-width:560px;margin:0 auto}</style></head>
+<body>
+<div class="wrap">
+  <h1>Tuỳ chọn · Dịch offline</h1>
+
+  <label for="base">Địa chỉ máy chủ</label>
+  <input type="text" id="base" placeholder="http://127.0.0.1:5001">
+  <p class="hint">Đây là nginx phục vụ UI tiếng Việt. Nó proxy <code>/api</code> tới
+     LibreTranslate và <code>/api2</code> tới EnViT5.</p>
+
+  <label for="engine">Bộ dịch</label>
+  <select id="engine"></select>
+  <p class="hint"><b>Tự chọn</b>: dùng EnViT5 cho EN↔VI (dịch sát hơn), LibreTranslate cho
+     các cặp còn lại. Chọn tay mà cặp đó không hỗ trợ thì tự quay về LibreTranslate.</p>
+
+  <label for="target">Dịch sang</label>
+  <select id="target"></select>
+
+  <div class="check">
+    <input type="checkbox" id="showBubble">
+    <label for="showBubble" style="margin:0">Hiện nút nhỏ khi bôi đen văn bản</label>
+  </div>
+  <p class="hint">Tắt đi thì vẫn dịch được bằng <b>Alt+T</b> hoặc menu chuột phải.</p>
+
+  <label for="maxChars">Giới hạn ký tự mỗi lần</label>
+  <input type="text" id="maxChars" inputmode="numeric">
+
+  <div class="row" style="margin-top:16px">
+    <button class="primary" id="save">Lưu</button>
+    <button id="test">Kiểm tra kết nối</button>
+    <button id="reset">Khôi phục mặc định</button>
+  </div>
+  <p class="status" id="status"></p>
+</div>
+<script type="module" src="options.js"></script>
+</body>
+</html>

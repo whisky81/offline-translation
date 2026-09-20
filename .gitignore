@@ -1,0 +1,22 @@
+# Cau hinh rieng cua may
+.env
+
+# Trang thai chay do docker/buildx sinh ra trong config rieng cua project.
+# Chi config.json va README.md la thu ta chu dong tao.
+docker-config/buildx/
+docker-config/contexts/
+docker-config/.token_seed*
+# Symlink toi binary he thong — duong dan khac nhau giua cac may, scripts/_docker-env.sh
+# tu tao lai khi chay.
+docker-config/cli-plugins/
+
+# Anh chup man hinh khi go loi
+error-imgs/
+
+# Python
+__pycache__/
+*.pyc
+
+# Khac
+data/
+*.log
