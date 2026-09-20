@@ -183,3 +183,66 @@ thật, nhìn xuyên shadow root, **đọc pixel canvas**.
 **Giá:** chậm hơn (~60 s cho các test trình duyệt), và cần Brave/Node. Test tự
 bỏ qua nếu thiếu. Đây là tầng duy nhất bắt được phần lớn lỗi giao diện trong
 [sổ lỗi](issues.md).
+
+
+---
+
+## Máy đọc chạy ở máy chủ, không dùng `speechSynthesis`
+
+**Bối cảnh:** trình duyệt có sẵn Web Speech API — 0 dòng phía máy chủ, 0 MB đĩa.
+Đó đáng lẽ là lựa chọn hiển nhiên.
+
+**Vì sao không được:** đo trước khi viết mã, `speechSynthesis.getVoices()` trong
+Brave trên máy này trả về **mảng rỗng**. Chromium trên Linux không kèm giọng nào.
+Và kiểu hỏng của nó là tệ nhất có thể: `speak()` không ném lỗi, chỉ im lặng.
+
+**Chọn:** Piper (VITS/ONNX) trong container riêng, trả về WAV qua `/api3`.
+
+**Giá:** image 711 MB, RAM đỉnh ~1,3 GB, và giấy phép GPL-3.0 phải ghi chú.
+Đổi lại: nghe được trên mọi máy, giọng neural nghe như người, và cùng một đường
+đi cho cả giao diện web lẫn extension lẫn trình đọc PDF.
+
+**Đã cân nhắc:** espeak-ng chỉ ~5 MB và cài bằng `apt`. Bỏ vì giọng robot rõ rệt
+— dự án này đã một lần chọn chất lượng hơn dung lượng (EnViT5 285 MB thay vì
+dùng Argos cho `en↔vi`), và một máy đọc nghe khó chịu thì sẽ không ai bật lần
+thứ hai.
+
+---
+
+## Cắt câu ở client, máy chủ giữ thuần `text -> wav`
+
+**Bối cảnh:** tổng hợp 2000 ký tự mất ~8–10 giây. Bấm Đọc rồi chờ 10 giây thì
+người dùng tưởng hỏng.
+
+**Hai hướng:** (a) máy chủ stream WAV theo từng khối, (b) client cắt câu rồi phát
+nối tiếp.
+
+**Chọn (b).** Lý do là một con số: tổng hợp **nhanh hơn phát ~10 lần** (301 ký tự
+→ 1,37 giây tổng hợp → 15,93 giây tiếng). Nên chỉ cần tải đoạn kế tiếp trong lúc
+đoạn này đang phát là đủ — không bao giờ hụt, mà máy chủ vẫn là một hàm thuần,
+dễ test, dễ gọi bằng `curl`, và bộ đệm hoạt động ở mức từng câu.
+
+**Giá:** logic đọc bị **nhân đôi** giữa `web/html/js/tts.js` và `extension/tts.js`
+(hai nơi phục vụ từ hai origin khác nhau, không chia sẻ tệp được). Bù lại bằng
+cách giữ hai bản **giống nhau từng byte** và một test so sánh nhị phân — trôi ra
+khỏi nhau là test đỏ ngay.
+
+---
+
+## Âm thanh của extension phát ở tài liệu offscreen
+
+**Bối cảnh:** service worker của MV3 không có DOM nên không phát được âm thanh.
+Chỗ hiển nhiên còn lại là content script.
+
+**Vì sao content script không ổn:** thẻ `<audio>` khi đó nằm trong trang và chịu
+**CSP `media-src` của trang đó**. Một trang đặt `default-src 'self'` sẽ chặn
+`blob:`, và nút Đọc lại im lặng — đúng kiểu hỏng ta vừa tránh được ở trên.
+
+**Chọn:** `chrome.offscreen` với lý do `AUDIO_PLAYBACK`. Tài liệu này chạy theo
+origin của extension nên không dính CSP của trang, và có `host_permissions` nên
+gọi thẳng `127.0.0.1` được.
+
+**Giá:** thêm quyền `offscreen`, thêm một tệp, và phải tự làm **đường báo ngược**
+(offscreen → service worker → `chrome.tabs.sendMessage` → content script) vì
+`chrome.runtime.sendMessage` không tới được content script. Đứt đường đó thì nút
+kẹt ở "Dừng" vĩnh viễn, nên nó có test riêng.

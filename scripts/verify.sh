@@ -114,11 +114,36 @@ t1=$(date +%s%N)
 echo "      1 cau ngan: $(( (t1-t0)/1000000 )) ms"
 
 echo
-echo "[10] Tai nguyen container"
+echo "[10] May doc (tuy chon)"
+if curl -sf --max-time 5 "$LT_TTS_URL/health" >/dev/null 2>&1; then
+  langs=$(curl -sf --max-time 5 "$LT_TTS_URL/health" | jq -r '.languages | join(" ")')
+  ok "may doc song, giong cho: $langs"
+  wav=$(mktemp --suffix=.wav)
+  hdr=$(jq -n '{q:"Xin chào, đây là bản đọc thử.",lang:"vi"}' \
+        | curl -s -D- -o "$wav" --max-time 120 -X POST "$LT_TTS_URL/speak" \
+            -H 'Content-Type: application/json' --data @-)
+  secs=$(echo "$hdr" | grep -i '^x-seconds:' | tr -d '\r' | awk '{print $2}')
+  if [ -s "$wav" ] && head -c4 "$wav" | grep -q RIFF; then
+    ok "doc thu ra WAV that ($(stat -c%s "$wav") byte, ${secs:-?} giay tieng)"
+  else
+    bad "POST /speak khong tra ve WAV"
+  fi
+  # Cung ly do nhu /api va /api2: may doc khong duoc mo cho trang web bat ky.
+  tacao=$(echo "$hdr" | grep -ci '^access-control-allow-origin' || true)
+  [ "${tacao:-0}" = "0" ] && ok "may doc khong gui CORS" || bad "may doc gui CORS"
+  rm -f "$wav"
+else
+  echo "      (chua bat — nut Doc se khong hien; xem tts/README.md)"
+fi
+
+echo
+echo "[11] Tai nguyen container"
 . "$PROJECT_DIR/scripts/_docker-env.sh" 2>/dev/null || true
-docker stats --no-stream \
-  --format '      RAM {{.MemUsage}}  |  CPU {{.CPUPerc}}' libretranslate 2>/dev/null \
-  || echo "      (khong doc duoc docker stats)"
+for c in libretranslate lt-engine lt-tts; do
+  docker stats --no-stream \
+    --format "      $c: RAM {{.MemUsage}}  |  CPU {{.CPUPerc}}" "$c" 2>/dev/null \
+    || echo "      $c: (khong chay)"
+done
 
 echo
 echo "${B}=== $pass dat / $failn loi ===${N}"

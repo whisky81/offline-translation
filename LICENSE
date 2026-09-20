@@ -19,3 +19,27 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+-------------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+
+The MIT license above covers the source code in this repository only.
+
+This project orchestrates third-party software that is downloaded at build or
+run time and is NOT included in this repository. Each keeps its own license:
+
+  LibreTranslate .................. AGPL-3.0-only
+  Argos Translate / CTranslate2 ... MIT
+  VietAI/envit5-translation ....... OpenRAIL
+  Piper (piper1-gpl) .............. GPL-3.0-or-later
+  rhasspy/piper-voices ............ MIT
+  onnxruntime ..................... MIT
+  pdf.js .......................... Apache-2.0
+  nginx ........................... BSD-2-Clause
+
+LibreTranslate (AGPL-3.0) and Piper (GPL-3.0) are copyleft. In this project each
+runs as a separate program in its own container and communicates only over HTTP.
+No code in this repository is linked against, derived from, or a modified version
+of either. If you redistribute a combined work — for example a single image that
+bundles them, or a modified copy of either program — their terms apply to that
+distribution; consult them directly.

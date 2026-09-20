@@ -8,6 +8,8 @@
 #   ./tests/run.sh engine     chi test engine EnViT5
 #   ./tests/run.sh ext        chi test extension Brave
 #   ./tests/run.sh pdf        chi test trinh doc PDF (chay Brave that)
+#   ./tests/run.sh tts        chi test may doc (may chu + ma nguon)
+#   ./tests/run.sh ttsui      chi test doc thanh tieng trong trinh duyet that
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -30,15 +32,19 @@ case "$which" in
   engine) run "Engine EnViT5" tests.test_engine ;;
   ext)   run "Extension Brave" tests.test_extension ;;
   pdf)   run "Trinh doc PDF" tests.test_pdf_viewer ;;
+  tts)   run "May doc Piper" tests.test_tts ;;
+  ttsui) run "Doc thanh tieng trong trinh duyet" tests.test_tts_browser ;;
   all)
     run "Cau hinh project" tests.test_setup
     run "API + Web UI"     tests.test_api
     run "UI tieng Viet"    tests.test_web
     run "Engine EnViT5"    tests.test_engine
     run "Ca xau / ca bien" tests.test_edge_cases
+    run "May doc Piper"    tests.test_tts
     run "Extension Brave"  tests.test_extension
-    run "Trinh doc PDF"    tests.test_pdf_viewer ;;
-  *) echo "Dung: $0 [all|api|setup|edge|web|engine|ext|pdf]"; exit 1 ;;
+    run "Trinh doc PDF"    tests.test_pdf_viewer
+    run "Doc thanh tieng"  tests.test_tts_browser ;;
+  *) echo "Dung: $0 [all|api|setup|edge|web|engine|ext|pdf|tts|ttsui]"; exit 1 ;;
 esac
 
 if [ "$rc" -eq 0 ]; then echo "${B}Tat ca test dat.${N}"; else echo "${B}Co test that bai.${N}"; fi

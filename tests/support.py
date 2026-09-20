@@ -43,6 +43,8 @@ WEB = f"http://{_host()}:{env('WEB_PORT', '5001')}"
 API = f"{WEB}/api"
 #: EnViT5 — cung vay.
 ENGINE = f"{WEB}/api2"
+#: May doc Piper — cung vay.
+TTS = f"{WEB}/api3"
 
 
 class Response(NamedTuple):

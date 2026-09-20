@@ -2,12 +2,14 @@
 import { ApiError, api, detectLanguage, engineAlive, frontendSettings, languages } from "./api.js";
 import { ENGINES, normLang, pickEngine } from "./engines.js";
 import { clearHistory, history, load, remember, save } from "./store.js";
+import { Reader, ttsAvailable } from "./tts.js";
 
 const $ = (id) => document.getElementById(id);
 const el = Object.fromEntries(
   ["health", "src", "tgt", "swap", "input", "output", "alts", "detected", "count",
    "timing", "status", "copy", "clear", "theme", "file", "dofile", "formats",
-   "fileout", "hist", "inpane", "engine", "clearhist", "histcount"]
+   "fileout", "hist", "inpane", "engine", "clearhist", "histcount",
+   "readin", "readout", "rate"]
     .map((id) => [id, $(id)]));
 
 const DEBOUNCE_MS = 350;
@@ -16,6 +18,8 @@ let debounce = null;
 let inflight = null;        // AbortController cua request dang chay
 let seq = 0;                // chong ket qua ve tre ghi de ket qua moi
 let detectedSource = null;  // ngon ngu nhan dien duoc gan nhat
+let ttsLangs = null;        // ngon ngu may doc co giong; null = chua co may doc
+let reading = null;         // "in" | "out" khi dang doc
 
 const esc = (s) => s.replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -60,6 +64,67 @@ function refreshEngineHint() {
   el.engine.title = fallback || `Bộ dịch: ${ENGINES[key]?.name ?? "tự chọn"}`;
 }
 
+// ---------- doc thanh tieng ---------------------------------------------
+// May doc chi biet ma ngon ngu goc: 'zh-Hans' -> 'zh'.
+const baseLang = (code) => (code || "").split("-")[0].toLowerCase();
+
+const reader = new Reader({ onState: onReadState });
+
+/** Ngon ngu cua o nao. O nguon co the dang 'auto' -> lay cai vua nhan dien. */
+function readLangOf(which) {
+  if (which === "out") return baseLang(el.tgt.value);
+  return baseLang(el.src.value === "auto" ? detectedSource : el.src.value);
+}
+
+function resetReadButtons() {
+  for (const b of [el.readin, el.readout]) {
+    b.textContent = "Đọc";
+    b.classList.remove("on");
+  }
+}
+
+/** Bat/tat tung nut theo viec co giong cho ngon ngu do va co chu de doc khong. */
+function refreshReadButtons() {
+  if (!ttsLangs) return;                       // khong co may doc, nut van an
+  for (const [which, btn, text] of [["in", el.readin, el.input.value],
+                                    ["out", el.readout, el.output.textContent]]) {
+    const lang = readLangOf(which);
+    const hasVoice = Boolean(lang) && ttsLangs.includes(lang);
+    btn.disabled = !hasVoice || !text.trim();
+    btn.title = !text.trim() ? "Chưa có chữ để đọc"
+      : hasVoice ? `Đọc bằng giọng ${lang}`
+      : lang ? `Chưa có giọng cho "${lang}" — xem TTS_VOICES trong .env`
+             : "Dịch một lần trước để biết ngôn ngữ";
+  }
+}
+
+function onReadState(s) {
+  resetReadButtons();
+  if (s.state === "stopped") { reading = null; return; }
+  if (s.state === "error") {
+    reading = null;
+    setStatus(`Không đọc được: ${s.error}`, true);
+    return;
+  }
+  const btn = reading === "in" ? el.readin : el.readout;
+  btn.classList.add("on");
+  btn.textContent = s.state === "loading" ? "…" : "Dừng";
+  btn.title = s.total > 1 ? `Đang đọc đoạn ${s.index + 1}/${s.total}` : "Đang đọc";
+}
+
+async function toggleRead(which) {
+  // Bam lai dung nut dang doc = dung. Bam nut kia = chuyen sang doc o do.
+  const again = reading === which;
+  reader.stop();
+  if (again) return;
+
+  const text = (which === "in" ? el.input.value : el.output.textContent).trim();
+  const lang = readLangOf(which);
+  if (!text || !lang) return;
+  reading = which;
+  await reader.play(text, { lang, speed: Number(el.rate.value) || 1 });
+}
+
 // ---------- dich ---------------------------------------------------------
 const schedule = () => { clearTimeout(debounce); debounce = setTimeout(translate, DEBOUNCE_MS); };
 
@@ -70,6 +135,7 @@ function resetOutput() {
   el.detected.textContent = "";
   el.detected.dataset.code = "";
   el.timing.textContent = "";
+  refreshReadButtons();
 }
 
 async function translate() {
@@ -127,6 +193,7 @@ async function translate() {
       ? `<span class="chip">${esc(nameOf(d.language))} ${Math.round(d.confidence)}%</span>` : "";
 
     setStatus(fallback || "");
+    refreshReadButtons();
     remember(q, data.translatedText);
     renderHistory();
   } catch (err) {
@@ -218,8 +285,18 @@ async function boot() {
     el.formats.textContent = (s.supportedFilesFormat || []).join("  ");
   } catch { /* khong quan trong */ }
 
+  // May doc la tuy chon. Khong co thi cac nut lien quan cu an — khong hien
+  // mot nut bam vao chi de bao loi.
+  const tts = await ttsAvailable();
+  if (tts) {
+    ttsLangs = tts.languages;
+    for (const node of document.querySelectorAll(".tts")) node.hidden = false;
+    el.rate.value = load("rate", "1");
+  }
+
   refreshEngineHint();
   refreshPairControls();
+  refreshReadButtons();
   renderHistory();
 
   const draft = load("draft", "");
@@ -228,7 +305,7 @@ async function boot() {
 }
 
 // ---------- su kien -------------------------------------------------------
-el.input.addEventListener("input", () => { updateCount(); schedule(); });
+el.input.addEventListener("input", () => { updateCount(); schedule(); refreshReadButtons(); });
 el.src.addEventListener("change", () => {
   save("src", el.src.value); refreshPairControls(); refreshEngineHint(); translate();
 });
@@ -267,6 +344,18 @@ el.theme.addEventListener("click", () => {
   const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const next = cur ? (cur === "dark" ? "light" : null) : (dark ? "light" : "dark");
   applyTheme(next); save("theme", next);
+});
+
+el.readin.addEventListener("click", () => toggleRead("in"));
+el.readout.addEventListener("click", () => toggleRead("out"));
+el.rate.addEventListener("change", () => {
+  save("rate", el.rate.value);
+  // Doi toc do giua chung: doc lai tu dau o toc do moi, vi cac doan da tai
+  // deu mang toc do cu.
+  const which = reading;
+  if (!which) return;
+  reader.stop();          // -> onReadState('stopped') dat reading = null
+  toggleRead(which);      // reading da null nen day la bat dau lai, khong phai tat
 });
 
 el.dofile.addEventListener("click", () => translateFile(el.file.files[0]));

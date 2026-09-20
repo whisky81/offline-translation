@@ -32,6 +32,14 @@
     <button class="iconbtn" id="swap" title="Đảo chiều dịch" aria-label="Đảo chiều dịch">⇄</button>
     <label class="visually-hidden" for="tgt">Ngôn ngữ đích</label>
     <select id="tgt"></select>
+    <span class="sep tts" hidden aria-hidden="true"></span>
+    <label class="visually-hidden" for="rate">Tốc độ đọc</label>
+    <select id="rate" class="tts" hidden title="Tốc độ đọc">
+      <option value="0.75">0,75×</option>
+      <option value="1" selected>1×</option>
+      <option value="1.25">1,25×</option>
+      <option value="1.5">1,5×</option>
+    </select>
   </div>
 
   <div class="panes">
@@ -39,6 +47,7 @@
       <header>
         <span>Văn bản gốc</span>
         <span class="spacer"></span>
+        <button class="iconbtn tts" id="readin" hidden>Đọc</button>
         <button class="iconbtn" id="clear">Xoá</button>
       </header>
       <label class="visually-hidden" for="input">Văn bản cần dịch</label>
@@ -56,6 +65,7 @@
         <span>Bản dịch</span>
         <span id="detected"></span>
         <span class="spacer"></span>
+        <button class="iconbtn tts" id="readout" hidden>Đọc</button>
         <button class="iconbtn" id="copy">Chép</button>
       </header>
       <div class="out" id="output" data-empty="Bản dịch hiện ở đây." aria-live="polite"></div>

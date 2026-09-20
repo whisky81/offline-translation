@@ -28,12 +28,31 @@ Ba ràng buộc này chi phối gần như mọi quyết định:
 | Engine mặc định | LibreTranslate (Argos + CTranslate2) | 1.9.6 | Docker `libretranslate/libretranslate` |
 | Engine chất lượng | VietAI/envit5-translation qua CTranslate2 | int8, 285 MB | Chỉ `en↔vi`, giấy phép `openrail` |
 | Máy chủ engine | Python 3.12 + `http.server` | — | Tự viết, ~180 dòng |
-| Proxy + UI | nginx | 1.29-alpine | Phục vụ UI tĩnh, proxy `/api` và `/api2` |
+| Máy đọc | Piper (VITS) qua onnxruntime | piper-tts 1.8.0, ORT 1.30 | GPL-3.0; giọng `vi_VN-vais1000`, `en_US-amy` (MIT) |
+| Proxy + UI | nginx | 1.29-alpine | Phục vụ UI tĩnh, proxy `/api`, `/api2`, `/api3` |
 | UI web | HTML + ES module thuần | — | **Không framework, không CDN** |
 | Extension | Chrome MV3 | — | Content script + service worker |
 | Đọc PDF | pdf.js | 6.3.289 (Apache-2.0) | Chép vào `extension/vendor/`, không CDN |
 | Vòng đời | systemd + docker compose | systemd 259 | Unit `libretranslate.service` |
 | Test | `unittest` thư viện chuẩn + Node CDP | Python 3.14, Node 22 | Không phụ thuộc ngoài |
+
+## Ngân sách tài nguyên
+
+Đo thật trên máy này, lúc cả bốn container chạy:
+
+| Container | RAM lúc rảnh | RAM đỉnh | Trần đặt trong `.env` |
+|---|---|---|---|
+| `libretranslate` | ~1,7 GB | ~2,2 GB | 5 GB |
+| `lt-engine` | ~270 MB | ~300 MB | 3 GB |
+| `lt-tts` | ~290 MB | **~1,3 GB** | 2 GB |
+
+RAM đỉnh của máy đọc tỉ lệ với `TTS_MAX_CHARS`: arena của onnxruntime giãn theo
+đoạn dài nhất từng tổng hợp rồi **đứng yên** (đã thử 5 lần liên tiếp ở 2000 ký
+tự, không tăng thêm, không bị OOM). Giảm `TTS_MAX_CHARS` là giảm được đỉnh này.
+
+Bộ đệm WAV giới hạn theo **số byte** (`TTS_CACHE_MB=64`) chứ không theo số mục:
+một câu ngắn và một đoạn 2000 ký tự chênh nhau vài chục lần, nên "tối đa N mục"
+không nói được gì về lượng RAM thật.
 
 ## Vì sao không có framework
 

@@ -85,6 +85,7 @@ class TestPermissionsMatchCode(unittest.TestCase):
         "chrome.storage":      "storage",
         "chrome.contextMenus": "contextMenus",
         "chrome.scripting":    "scripting",
+        "chrome.offscreen":    "offscreen",
         "chrome.commands":     None,
         "chrome.runtime":      None,
         "chrome.tabs":         None,      # chi dung id/query, khong doc url

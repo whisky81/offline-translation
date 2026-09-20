@@ -20,3 +20,4 @@ LT_HOST=127.0.0.1
 LT_WEB_URL="http://${LT_HOST}:${LT_WEB_PORT}"   # nginx: UI + /api + /api2
 LT_API_URL="${LT_WEB_URL}/api"                  # LibreTranslate qua proxy
 LT_ENGINE_URL="${LT_WEB_URL}/api2"              # EnViT5 qua proxy
+LT_TTS_URL="${LT_WEB_URL}/api3"                 # may doc Piper qua proxy

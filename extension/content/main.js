@@ -19,7 +19,9 @@
   const live = { capture: true, signal: ac.signal };
   const livePassive = { capture: true, passive: true, signal: ac.signal };
 
-  let settings = { showBubble: true, target: "vi" };
+  // Cac khoa o day cung la danh sach khoa duoc doc tu storage.sync — thieu
+  // mot khoa la khoa do khong bao gio duoc nap.
+  let settings = { showBubble: true, target: "vi", rate: 1 };
   let lastText = "", lastRect = null;
   // Bam nut se an nut ngay o mousedown. Khi nha chuot, cho do khong con nut
   // nen mouseup roi xuong TRANG -> handler tuong da boi den cho khac ->
@@ -43,16 +45,62 @@
       try { chrome.storage.sync.set({ target }); } catch { /* context da chet */ }
       run(sourceText);
     },
+    onSpeak: speak,
+    onStopSpeak: stopSpeak,
   });
 
   const hideAll = () => { overlay.hideBubble(); closeCard(); };
-  function closeCard() { runToken++; overlay.hideCard(); }
+  function closeCard() { runToken++; stopSpeak(); overlay.hideCard(); }
+
+  // ---- doc thanh tieng --------------------------------------------------
+  // Viec phat nam o tai lieu offscreen cua extension, khong o day: the <audio>
+  // dat trong trang se chiu CSP media-src cua TRANG, va trang nao siet chat
+  // blob: thi nut Doc se im lang ma khong bao gi.
+  let ttsAsked = null;
+
+  /** Hoi mot lan cho moi lan nap content script, chay song song voi lan dich. */
+  function ensureTtsLangs() {
+    if (ttsAsked) return ttsAsked;
+    try {
+      ttsAsked = chrome.runtime.sendMessage({ type: "tts-langs" })
+        .then((r) => overlay.setTtsLanguages(r?.languages || []))
+        .catch(() => overlay.setTtsLanguages([]));
+    } catch {
+      overlay.setTtsLanguages([]);
+      ttsAsked = Promise.resolve();
+    }
+    return ttsAsked;
+  }
+
+  async function speak(which, text, lang) {
+    if (extensionGone()) { overlay.setReadError(which, RELOAD_MSG); return; }
+    // Doi nhan nut ngay, truoc khi goi mang: bam xong ma nut khong nhuc nhich
+    // trong nua giay thi nguoi dung se bam lan nua.
+    overlay.setReading(which);
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: "tts-speak", q: text, lang, speed: settings.rate ?? 1,
+      });
+      if (!res?.ok) overlay.setReadError(which, res?.error || "máy đọc không phản hồi");
+    } catch (err) {
+      overlay.setReadError(which, /context invalidated/i.test(err.message || "")
+        ? RELOAD_MSG : String(err.message || err));
+    }
+  }
+
+  function stopSpeak() {
+    if (!overlay.reading) return;
+    overlay.setReading(null);
+    try { chrome.runtime.sendMessage({ type: "tts-stop" }).catch(() => {}); }
+    catch { /* context da chet — khong con gi de dung */ }
+  }
 
   try {
     chrome.storage.sync.get(settings).then((s) => (settings = { ...settings, ...s }), () => {});
     chrome.storage.onChanged.addListener((ch) => {
       if (ch.showBubble) settings.showBubble = ch.showBubble.newValue;
       if (ch.target) settings.target = ch.target.newValue;
+      if (ch.rate) settings.rate = ch.rate.newValue;
     });
   } catch { /* context da chet — van chay duoc voi mac dinh */ }
 
@@ -61,8 +109,12 @@
     if (text.length < MIN_CHARS) return;
     const mine = ++runToken;
     overlay.hideBubble();
+    stopSpeak();                     // ban dich cu sap bien mat, dung doc no nua
     if (extensionGone()) { overlay.renderError(RELOAD_MSG); return; }
     overlay.renderLoading(text);
+    // Chay song song voi lan dich: khi ket qua ve thi da biet co giong nao,
+    // khong phai cho them mot vong nua moi ve duoc nut Doc.
+    const langsReady = ensureTtsLangs();
 
     let res;
     try {
@@ -77,6 +129,8 @@
     if (mine !== runToken) return;    // nguoi dung da dong, hoac co lan dich moi
     if (!res) { overlay.renderError("Service worker không phản hồi."); return; }
     if (!res.ok) { overlay.renderError(res.error); return; }
+    await langsReady;
+    if (mine !== runToken) return;
     overlay.renderResult(res, text, res.target || settings.target);
   }
 
@@ -116,6 +170,13 @@
   }, { passive: true, signal: ac.signal });
 
   const onRuntimeMessage = (msg) => {
+    // Tai lieu offscreen bao tien do doc, service worker chuyen tiep sang day.
+    if (msg?.type === "tts-state") {
+      if (msg.state === "stopped") overlay.setReading(null);
+      else if (msg.state === "error") overlay.setReadError(overlay.reading, msg.error);
+      // "loading"/"playing" da duoc phan anh ngay luc bam, khong can lam gi.
+      return;
+    }
     if (msg?.type !== "translate-selection") return;
     const got = readSelection();
     if (!got) return;
@@ -128,6 +189,7 @@
 
   // Ban nap sau se goi ham nay de ban nay bien mat han.
   window.__dichOfflineCleanup = () => {
+    stopSpeak();
     ac.abort();
     try { chrome.runtime.onMessage.removeListener(onRuntimeMessage); } catch { /* da chet */ }
     overlay.destroy();

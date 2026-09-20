@@ -21,6 +21,7 @@ Xong. Ghim biểu tượng lên thanh công cụ cho tiện.
 |---|---|
 | Bôi đen chữ | Hiện nút **🗣️ Dịch** ngay dưới vùng chọn |
 | Bấm nút đó | Thẻ dịch hiện ra, đổi được ngôn ngữ đích ngay trong thẻ |
+| **Đọc gốc** / **Đọc bản dịch** trên thẻ | Nghe đoạn đó bằng giọng neural chạy offline. Bấm lại để dừng. Nút chỉ hiện với thứ tiếng có giọng |
 | **Alt+T** | Dịch phần đang bôi đen, không cần bấm nút |
 | Chuột phải → *Dịch đoạn đang chọn* | Như trên |
 | Bấm biểu tượng extension | Popup để dán văn bản dài; nếu đang bôi đen sẵn thì tự điền vào |
@@ -157,6 +158,33 @@ Tìm ra bằng cách điều khiển Brave thật và **chụp ảnh màn hình 
 | Trình đọc màn hình không thấy nút và thẻ | Thêm `role="button"` + `tabindex` + `aria-label` cho nút (bấm được bằng Enter/Space), `role="dialog"` + `aria-live` cho thẻ, `:focus-visible` rõ ràng |
 | Đổi kích thước cửa sổ làm thẻ tràn ra ngoài màn hình | Kẹp lại trong khung nhìn thay vì đóng |
 
+## Vì sao âm thanh phát ở tài liệu offscreen
+
+Có ba chỗ về lý thuyết phát được âm thanh, và hai chỗ đầu đều hỏng:
+
+| Chỗ | Vì sao không được |
+|---|---|
+| Service worker | MV3 không có DOM — không có `Audio()` |
+| Content script | Thẻ `<audio>` nằm trong trang nên **chịu CSP `media-src` của trang**. Một trang đặt `default-src 'self'` sẽ chặn `blob:`, và nút Đọc im lặng không báo gì |
+| **Tài liệu offscreen** | Chạy theo origin của extension: không dính CSP của trang, lại có `host_permissions` nên gọi thẳng `127.0.0.1` được |
+
+Hệ quả là phải tự làm **đường báo ngược** để nhãn nút biết lúc nào đọc xong:
+
+```
+ui.js  bấm Đọc ──▶ background.js ──▶ offscreen.js  (cắt câu, fetch, phát)
+                        ▲                  │
+   overlay.setReading ◀──┴── tabs.sendMessage ◀── tts-state
+```
+
+`chrome.runtime.sendMessage` **không tới được** content script, nên service
+worker phải chuyển tiếp bằng `chrome.tabs.sendMessage`. Đứt đoạn này thì nút
+kẹt ở "Dừng" vĩnh viễn — `test_tts_browser.test_nhan_tu_tro_ve_khi_doc_xong`
+canh đúng điều đó.
+
+`extension/tts.js` **giống `web/html/js/tts.js` từng byte**; sửa một bên phải
+chép sang bên kia, và `test_tts.test_hai_ban_tts_js_giong_het_nhau` so sánh nhị
+phân để không quên.
+
 ## Vì sao giao diện nằm trong shadow DOM
 
 Nút và thẻ dịch được gắn vào một shadow root `mode: "closed"`. CSS của trang không
@@ -187,6 +215,7 @@ Nút **Kiểm tra kết nối** cho biết cả hai engine có sống không.
 | `storage` | Nhớ tuỳ chọn |
 | `contextMenus` | Mục "Dịch đoạn đang chọn" trong menu chuột phải |
 | `scripting` + `activeTab` | Đọc vùng bôi đen khi bạn mở popup từ thanh công cụ |
+| `offscreen` | Phát âm thanh. Service worker của MV3 không có DOM nên không phát được, mà phát trong trang thì dính CSP `media-src` của trang đó |
 | `host_permissions: 127.0.0.1:5001` | Gọi máy chủ dịch — **chỉ localhost, không có tên miền nào khác** |
 | `content_scripts: <all_urls>` | Bắt buộc, vì phải bôi đen được trên mọi trang |
 

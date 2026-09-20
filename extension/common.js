@@ -7,6 +7,7 @@ export const DEFAULTS = {
   source: "auto",
   showBubble: true,    // hien nut nho khi boi den
   maxChars: 5000,
+  rate: 1,             // toc do doc (0.5 - 2.0)
 };
 
 // Hai engine sau cung mot origin. EnViT5 chi lam duoc en<->vi.
@@ -134,6 +135,16 @@ export async function fetchLanguages(base) {
   const res = await fetch(`${base}/api/languages`);
   if (!res.ok) throw new ApiError(`HTTP ${res.status}`);
   return res.json();
+}
+
+/** Ngon ngu ma may doc co giong. Mang rong = khong co may doc (hoac no tat). */
+export async function ttsLanguages(base) {
+  try {
+    const res = await fetch(`${base}/api3/health`);
+    if (!res.ok) return [];
+    const h = await res.json();
+    return Array.isArray(h.languages) ? h.languages : [];
+  } catch { return []; }
 }
 
 export async function engineAvailable(base) {

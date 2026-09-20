@@ -48,6 +48,14 @@ header .spacer { flex: 1; }
 }
 .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
 .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.iconbtn:disabled { opacity: .45; cursor: not-allowed; }
+.iconbtn:disabled:hover { border-color: var(--border); color: var(--text); }
+/* Dang doc: nut doi sang mau nhan de nhin mot cai la biet cho nao dang phat. */
+.iconbtn.on {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+}
+/* O toc do doc hep hon cac o chon khac — no chi chua "1,25x". */
+#rate { min-width: 0; padding: 7px 8px; }
 
 .langbar {
   display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;

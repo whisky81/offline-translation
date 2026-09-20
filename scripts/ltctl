@@ -28,6 +28,8 @@ ltctl - dieu khien may chu dich LibreTranslate
   upgrade        Keo image moi + khoi dong lai
   update-models  Cap nhat model ngon ngu (can mang)
   models         Liet ke ngon ngu dang co
+  voices         Liet ke giong doc dang co
+  rebuild-tts    Build lai may doc (sau khi doi TTS_VOICES trong .env)
   shell          Mo shell trong container
   test           Chay toan bo test (them 'api'/'setup'/'web'/'lens' de chay rieng)
   boot-check     Kiem tra cac cong co tu len lai sau reboot khong
@@ -74,6 +76,14 @@ case "$cmd" in
       echo "OK - $BASE ($n ngon ngu)"
     else
       echo "Chua phan hoi tai $BASE"
+    fi
+    echo
+    echo "=== May doc ==="
+    if curl -sf --max-time 5 "$LT_TTS_URL/health" >/dev/null 2>&1; then
+      curl -sf --max-time 5 "$LT_TTS_URL/health" \
+        | jq -r '"OK - " + (.voices|tostring) + " giong, ngon ngu: " + (.languages|join(", "))'
+    else
+      echo "Chua bat (nut Doc se khong hien) - xem tts/README.md"
     fi ;;
 
   logs)
@@ -89,7 +99,8 @@ case "$cmd" in
     echo "UI goc LibreTr. : $LT_API_URL/"
     echo "Swagger         : $LT_WEB_URL/docs/"
     echo "API (Argos)     : POST $LT_WEB_URL/api/translate"
-    echo "API (EnViT5)    : POST $LT_WEB_URL/api2/translate" ;;
+    echo "API (EnViT5)    : POST $LT_WEB_URL/api2/translate"
+    echo "May doc (Piper) : POST $LT_WEB_URL/api3/speak" ;;
 
   pull)    "${DC[@]}" pull ;;
 
@@ -110,6 +121,20 @@ case "$cmd" in
       -c "from libretranslate.init import boot; boot($pylist, True, False)"
     if [ "$was_active" -eq 1 ]; then sudo systemctl start libretranslate.service; fi
     echo "Xong." ;;
+
+  voices)
+    curl -sf --max-time 10 "$LT_TTS_URL/voices" \
+      | jq -r '.[] | "\(.id)\t\(.lang)\t\(.quality)\t\(.sample_rate) Hz"' \
+      | column -t -s$'\t' ;;
+
+  rebuild-tts)
+    # Danh sach giong duoc nuong vao image luc build, nen doi TTS_VOICES
+    # trong .env chi co tac dung sau khi build lai.
+    "${DC[@]}" build --no-cache tts
+    "${DC[@]}" up -d tts
+    echo "Da build lai may doc. Giong hien co:"
+    sleep 3
+    curl -sf --max-time 10 "$LT_TTS_URL/health" | jq -r '.languages | join(", ")' || true ;;
 
   models)
     curl -sf --max-time 10 "$BASE/languages" \

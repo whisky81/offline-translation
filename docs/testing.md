@@ -11,6 +11,8 @@
 ./tests/run.sh edge       # ca xấu / ca biên
 ./tests/run.sh ext        # extension
 ./tests/run.sh pdf        # trình đọc PDF (chạy Brave thật)
+./tests/run.sh tts        # máy đọc: API + cách nối dây
+./tests/run.sh ttsui      # đọc thành tiếng trong Brave thật
 ```
 
 Không cần cài gì: `unittest` thư viện chuẩn + Node có sẵn.
@@ -37,6 +39,10 @@ khi extension hỏng hoàn toàn ngoài đời**. Tĩnh không thấy được n
 | `test_extension.test_content_script_does_not_fetch` | Gọi mạng sai chỗ → bị chặn trên trang https |
 | `test_web.test_no_external_resources` | Một `<script src="https://…">` lọt vào là mất tính offline |
 | `test_setup.test_user_docker_config_left_untouched` | Project lỡ tay sửa cấu hình Docker Desktop của người dùng |
+| `test_tts.test_hai_ban_tts_js_giong_het_nhau` | So sánh **từng byte** `web/html/js/tts.js` với `extension/tts.js`. Hai bản sao là chỗ dễ trôi khỏi nhau nhất: sửa bug một bên, bên kia vẫn hỏng |
+| `test_tts.test_content_script_khong_tu_phat_am_thanh` | Chặn `new Audio` lọt vào content script → sẽ dính CSP `media-src` của trang |
+| `test_tts_browser.test_nhan_tu_tro_ve_khi_doc_xong` | Đường báo ngược offscreen → SW → tab. Đứt là nút kẹt ở "Dừng" vĩnh viễn, và **không tầng nào khác thấy được** |
+| `test_tts_browser.test_khong_co_loi_console` | Đã bắt được [issue #29](issues.md) — promise tải trước bị huỷ |
 
 ## Cách viết test mới
 
@@ -83,6 +89,16 @@ Những cái này đã làm tôi mất thời gian, ghi lại để bạn khỏi
   `e2e_pdf.mjs` và `e2e_pdf_select.mjs` tách riêng.
 - **`pkill -f` tự giết mình**: mẫu khớp cả dòng lệnh của shell đang chạy. Neo vào
   đường dẫn binary: `pgrep -f '^/opt/brave\.com/brave/brave'`.
+- **Cuộn trước khi bấm**: cửa sổ headless mặc định chỉ **740×443**. Phần tử nằm
+  dưới mép vẫn cho `getBoundingClientRect()` hợp lệ, nhưng bấm vào toạ độ ngoài
+  khung nhìn thì không trúng gì — và trông y hệt một tính năng hỏng
+  ([issue #31](issues.md)). Gọi `scrollIntoView({block:'center'})` rồi **đo lại**.
+- **Âm thanh của extension không nằm trong trang**: nó phát ở tài liệu offscreen,
+  nên không probe được từ `Runtime.evaluate` của tab. Bằng chứng thay thế: số mục
+  trong bộ đệm `/api3/info` tăng lên, và `offscreen.html` xuất hiện trong danh
+  sách target.
+- **Văn bản trùng lần chạy trước sẽ ăn bộ đệm** của máy đọc và trả về sau 8 ms —
+  không chứng minh được gì. Chèn `Date.now()` vào văn bản thử.
 
 ## Ca biên đã phủ
 
@@ -97,3 +113,7 @@ Những cái này đã làm tôi mất thời gian, ghi lại để bạn khỏi
 - Tệp rỗng, đuôi lạ, không có đuôi
 - Đặt vị trí popup: vùng chọn to hơn khung nhìn, kích thước 0, thẻ to hơn màn hình
 - Chọn engine: khoá lạ, `auto` với engine giới hạn, `zh` alias
+- Máy đọc: `q` sai kiểu (số, mảng, bool, null), `speed` sai kiểu, `speed` ngoài
+  khoảng (kẹp lại), ngôn ngữ chưa có giọng, id giọng không tồn tại, chuỗi không
+  có chữ nào, ký tự điều khiển, văn bản vượt `TTS_MAX_CHARS`, thân không phải
+  đối tượng JSON

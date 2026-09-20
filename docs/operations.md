@@ -13,13 +13,14 @@
 
 ## Tên daemon
 
-**`libretranslate.service`** — một unit quản cả ba container:
+**`libretranslate.service`** — một unit quản cả bốn container:
 
 | Container | Cổng |
 |---|---|
-| `libretranslate` | 5000 (API + UI gốc) |
-| `lt-engine` | chỉ nội bộ |
-| `lt-web` | 5001 (UI tiếng Việt) |
+| `libretranslate` | chỉ nội bộ (qua `/api`) |
+| `lt-engine` | chỉ nội bộ (qua `/api2`) |
+| `lt-tts` | chỉ nội bộ (qua `/api3`) |
+| `lt-web` | **`127.0.0.1:5001`** — cổng duy nhất ra host |
 
 ## Sau khi sửa cấu hình
 
@@ -29,6 +30,8 @@
 | `web/html/*` | Chỉ cần tải lại trang (bind-mount, `Cache-Control: no-store`) |
 | `web/nginx.conf` | `docker exec lt-web nginx -s reload` |
 | `engine/server.py` | `docker compose build engine` rồi restart |
+| `tts/server.py` | `docker compose build tts` rồi restart |
+| `TTS_VOICES` trong `.env` | `./scripts/ltctl rebuild-tts` (tải lại giọng, ~2 phút) |
 | `extension/*` | `brave://extensions` → ⟳ → **Ctrl+R các tab đang mở** |
 | `systemd/*.in` | `sudo ./scripts/install.sh` |
 
@@ -42,7 +45,7 @@
 ./scripts/ltctl boot-check --simulate   # diễn tập: down rồi up y như lúc boot
 ```
 
-Cả `:5000` và `:5001` tự lên, **không cần đăng nhập**. Chuỗi phụ thuộc:
+`:5001` tự lên, **không cần đăng nhập**. Chuỗi phụ thuộc:
 
 ```
 containerd → docker.socket → docker.service → libretranslate.service
@@ -81,3 +84,26 @@ nên 4×4 là vừa.
 sudo ./scripts/uninstall.sh            # giữ model đã tải
 sudo ./scripts/uninstall.sh --purge    # xoá sạch cả model lẫn image
 ```
+
+## Máy đọc không ra tiếng
+
+Máy đọc là **tuỳ chọn** — tắt nó đi thì dịch vẫn chạy, chỉ là nút Đọc không hiện.
+Nếu nút không hiện hoặc bấm không kêu, lần theo thứ tự này:
+
+```bash
+./scripts/ltctl status          # mục "May doc" phải báo số giọng
+./scripts/ltctl voices          # liệt kê giọng đang có
+curl -s localhost:5001/api3/health
+```
+
+| Triệu chứng | Nguyên nhân thường gặp |
+|---|---|
+| Nút Đọc **không hiện** | `/api3/health` không trả 200, hoặc ngôn ngữ đó chưa có giọng. UI cố tình ẩn nút thay vì hiện một nút bấm vào chỉ để báo lỗi |
+| Nút hiện nhưng **mờ** | Ô đó chưa có chữ, hoặc nguồn đang `auto` mà chưa dịch lần nào nên chưa biết tiếng gì |
+| Nút hiện, bấm **báo lỗi** | Xem `docker logs lt-tts` |
+| Nút kẹt ở **"Dừng"** trên thẻ của extension | Đường báo ngược đứt. Tải lại trang (Ctrl+R); nếu lặp lại thì mở `brave://extensions` xem lỗi của service worker |
+| Đọc xong **im bặt giữa chừng** | Hết đoạn mà đoạn sau tải chưa xong — hiếm, vì tổng hợp nhanh hơn phát ~10 lần. Kiểm CPU: `docker stats lt-tts` |
+
+Thêm thứ tiếng mới: sửa `TTS_VOICES` trong `.env` rồi `./scripts/ltctl rebuild-tts`.
+Không cần sửa mã — UI đọc danh sách ngôn ngữ từ `/api3/health`. Xem
+[`../tts/README.md`](../tts/README.md).

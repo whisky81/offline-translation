@@ -261,6 +261,56 @@ Thiếu font emoji thì glyph không render. **Sửa:** dùng SVG nội tuyến.
 | **Cách sửa** | Đưa vào `.gitignore`; `scripts/_docker-env.sh` tự tạo lại, dò qua các đường dẫn hệ thống thường gặp |
 | **Test** | `test_setup.test_compose_plugin_is_docker_ce_build` tự tạo trước khi kiểm, và bỏ qua nếu máy không có docker-ce |
 
+### 27. `speechSynthesis` của trình duyệt không có giọng nào
+
+| | |
+|---|---|
+| **Triệu chứng** | Phát hiện trước khi viết dòng mã nào: `speechSynthesis.getVoices()` trong Brave trả về `{"count": 0, "sample": [], "vi": []}` |
+| **Nguyên nhân gốc** | Chromium trên Linux **không kèm giọng nào**. Nó đi mượn `speech-dispatcher` của hệ thống, mà trên máy này `speech-dispatcher` đang `inactive` và thiếu luôn engine espeak-ng (module `sd_espeak-ng` có mặt nhưng binary `espeak-ng` thì không) |
+| **Vì sao nguy hiểm** | Đây là kiểu hỏng tệ nhất: `speak()` không ném lỗi, không trả về gì, chỉ **im lặng**. Nút Đọc sẽ trông như bình thường và người dùng không có manh mối nào |
+| **Cách sửa** | Bỏ hẳn hướng đi này. Tổng hợp ở máy chủ (Piper) rồi trả về WAV — nghe được bất kể máy có cài gì |
+| **Test** | `test_tts.TestTtsService.test_doc_tieng_viet_ra_wav_that`, `test_tts_browser.test_bam_doc_thi_goi_may_chu_va_phat_that` |
+
+### 28. Văn bản không phát âm được cho ra tệp WAV rỗng
+
+| | |
+|---|---|
+| **Triệu chứng** | Đọc `"... !!! ???"` hoặc `"🙂🙂🙂"` trả về HTTP 200 với một tệp WAV chỉ có phần header. Bấm Đọc, không nghe gì, không báo gì |
+| **Nguyên nhân gốc** | Piper nhận chuỗi không có âm vị nào thì sinh ra 0 mẫu, nhưng vẫn là một tệp WAV hợp lệ |
+| **Cách sửa** | Hai lớp: từ chối sớm bằng `_SPEAKABLE = re.compile(r"[^\W_]")` (phải có ít nhất một chữ cái hoặc chữ số), và kiểm `getnframes() == 0` sau khi tổng hợp rồi trả 400 kèm lời khuyên |
+| **Bài học** | Với API trả về nhị phân, "200 + thân rỗng" là cái bẫy. Phải đọc lại chính tệp vừa tạo chứ không tin rằng gọi hàm xong là xong |
+| **Test** | `test_tts.TestTtsBadInput.test_van_ban_khong_co_chu` (4 chuỗi khác nhau) |
+
+### 29. Đoạn tải trước bị huỷ làm nổi `Uncaught (in promise)`
+
+| | |
+|---|---|
+| **Triệu chứng** | Bấm Đọc rồi bấm Dừng giữa chừng → console báo `Uncaught (in promise)` tại `tts.js`. Chức năng vẫn chạy đúng |
+| **Ai tìm ra** | Tầng test trình duyệt (`test_tts_browser.test_khong_co_loi_console`) — hai tầng kia đều xanh |
+| **Nguyên nhân gốc** | `Reader.play()` bắt đầu tải đoạn `i+1` **trước khi** phát đoạn `i`. Dừng giữa chừng thì vòng lặp thoát ra và bỏ lại promise đó đang bay; `ctl.abort()` làm nó bị từ chối, mà không còn ai `await` nữa |
+| **Cách sửa** | `p.catch(() => {})` ngay sau khi tạo: promise dẫn xuất này đánh dấu `p` là đã xử lý, còn `p` gốc vẫn ném lỗi bình thường cho chỗ nào thật sự `await` nó |
+| **Bài học** | Mọi mẫu "tải trước" đều sinh ra promise có thể không bao giờ được tiêu thụ. Cứ có `abort()` là phải nghĩ tới chúng |
+| **Test** | `test_tts_browser.TestReaderOnWebUi.test_khong_co_loi_console` |
+
+### 30. onnxruntime ghi cảnh báo telemetry mỗi lần khởi động
+
+| | |
+|---|---|
+| **Triệu chứng** | `[W:onnxruntime:Default, telemetry.cc:800] Failed to persist telemetry device ID; using an in-memory identifier` trong log container |
+| **Nguyên nhân gốc** | onnxruntime cố ghi một "telemetry device ID" vào `$HOME` lúc `import`, nhưng user hệ thống `tts` tạo bằng `useradd --system` nên `/home/tts` không tồn tại |
+| **Cách sửa đã CÂN NHẮC rồi bỏ** | Đặt `HOME=/tmp` cũng làm hết cảnh báo — nhưng nó hết vì việc ghi **thành công**, để lại một định danh máy trong `/tmp/.cache/Microsoft`. Với một công cụ offline thì đó là bước lùi |
+| **Cách sửa đã chọn** | `ENV ORT_DISABLE_TELEMETRY=1` trong `tts/Dockerfile` — tắt hẳn, không sinh và không lưu định danh nào |
+| **Bài học** | Cảnh báo im đi không có nghĩa là vấn đề đã hết. Phải hỏi *vì sao* nó im |
+
+### 31. Nút Đọc ở ô bản dịch "không hoạt động" — hoá ra là lỗi của test
+
+| | |
+|---|---|
+| **Triệu chứng** | Driver CDP báo bấm nút Đọc ở ô bản dịch cho `speaks: 0`, `plays: []`, nhãn không đổi. Nút ở ô gốc thì chạy bình thường |
+| **Nguyên nhân gốc** | **Không phải lỗi ứng dụng.** Cửa sổ Brave headless mặc định chỉ 740×443; ô bản dịch nằm dưới mép dưới. `getBoundingClientRect()` vẫn trả toạ độ hợp lệ, nhưng `Input.dispatchMouseEvent` ở `y` ngoài khung nhìn thì không trúng gì cả |
+| **Cách sửa** | Hàm `centerOf()` trong driver gọi `scrollIntoView({block:'center'})` rồi **đo lại** rect trước khi bấm |
+| **Bài học** | Bổ sung vào danh sách sai lầm khi viết test CDP trong [`testing.md`](testing.md). Một cú bấm không trúng trông y hệt một tính năng hỏng |
+
 ---
 
 ## Hạn chế của upstream (không sửa được từ đây)

@@ -1,8 +1,8 @@
 # Dịch offline
 
 Máy chủ dịch chạy hoàn toàn trên máy bạn — kèm giao diện web, extension cho
-trình duyệt, và trình đọc PDF dịch tại chỗ. Không tài khoản, không API key,
-**không byte nào rời khỏi máy** sau khi cài xong.
+trình duyệt, trình đọc PDF dịch tại chỗ, và **máy đọc thành tiếng**. Không tài
+khoản, không API key, **không byte nào rời khỏi máy** sau khi cài xong.
 
 Làm cho tiếng Việt: `en ⇄ vi` dùng model chuyên dụng, cộng thêm `zh · ja · ko`.
 
@@ -10,8 +10,9 @@ Làm cho tiếng Việt: `en ⇄ vi` dùng model chuyên dụng, cộng thêm `z
 ┌─ trình duyệt ────────────────┐     ┌─ trên máy bạn ──────────────┐
 │  bôi đen chữ → nút Dịch      │────▶│  nginx  127.0.0.1:5001      │
 │  PDF → trình đọc có dịch     │     │    ├── /      giao diện     │
-│  giao diện web đầy đủ        │     │    ├── /api   LibreTranslate│
-└──────────────────────────────┘     │    └── /api2  EnViT5        │
+│  nghe đọc bản gốc / bản dịch │     │    ├── /api   LibreTranslate│
+│  giao diện web đầy đủ        │     │    ├── /api2  EnViT5        │
+└──────────────────────────────┘     │    └── /api3  Piper (đọc)   │
                                      └─────────────────────────────┘
 ```
 
@@ -27,11 +28,12 @@ Làm cho tiếng Việt: `en ⇄ vi` dùng model chuyên dụng, cộng thêm `z
 | **Dịch cả tệp** | `.txt .odt .odp .docx .pptx .epub .html .srt .pdf`, giữ nguyên định dạng |
 | **REST API** | `POST /api/translate`, nhận chuỗi hoặc mảng chuỗi |
 | **Hai bộ dịch** | Argos nhanh, phủ mọi cặp; EnViT5 dịch EN↔VI sát hơn. Mặc định tự chọn |
+| **Đọc thành tiếng** | Giọng neural Piper chạy offline (`vi`, `en`). Nghe bản gốc để học phát âm, nghe bản dịch để kiểm lại. Có mặt trên giao diện web, thẻ dịch của extension, và trong trình đọc PDF |
 
 ## Yêu cầu
 
 - Linux với systemd, Docker Engine (không phải Docker Desktop — xem [tại sao](docs/decisions.md))
-- ~4 GB đĩa, ~3 GB RAM
+- ~5 GB đĩa, ~4 GB RAM (máy đọc chiếm ~700 MB đĩa và ~1,3 GB RAM lúc đỉnh — tắt được)
 - Mạng **chỉ cho lần cài đầu** (kéo image và tải model)
 
 Đã chạy thật trên Ubuntu 26.04 / Intel i5-1235U / không GPU. Không cần GPU.
@@ -44,7 +46,7 @@ cp .env.example .env
 
 ./scripts/preflight.sh        # kiểm tra môi trường, không đổi gì
 sudo ./scripts/install.sh     # bước duy nhất cần sudo
-./scripts/verify.sh           # 23 mục kiểm tra
+./scripts/verify.sh           # 26 mục kiểm tra
 ```
 
 Mở **<http://127.0.0.1:5001/>**.
@@ -68,6 +70,22 @@ Hugging Face và convert sang CTranslate2 int8 (~285 MB). Không bật cũng dù
 được — giao diện tự ẩn lựa chọn đó đi.
 </details>
 
+<details>
+<summary>Máy đọc Piper (tuỳ chọn)</summary>
+
+Cũng build sẵn trong `docker compose`; lần đầu tải 2 giọng (~126 MB). Không bật
+thì nút **Đọc** đơn giản là không hiện — dịch vẫn chạy y nguyên.
+
+```bash
+./scripts/ltctl voices        # giọng đang có
+./scripts/ltctl rebuild-tts   # sau khi đổi TTS_VOICES trong .env
+```
+
+Vì sao phải có máy chủ riêng thay vì dùng `speechSynthesis` của trình duyệt:
+Chromium trên Linux **không kèm giọng nào** (`getVoices()` trả về mảng rỗng), nên
+nút Đọc kiểu đó sẽ im lặng mà không báo lỗi. Chi tiết: [`tts/README.md`](tts/README.md).
+</details>
+
 ## Dùng
 
 ```bash
@@ -82,6 +100,14 @@ Hugging Face và convert sang CTranslate2 int8 (~285 MB). Không bật cũng dù
 curl -X POST http://127.0.0.1:5001/api/translate \
   -H 'Content-Type: application/json' \
   -d '{"q":"Good morning","source":"auto","target":"vi","format":"text"}'
+```
+
+Đọc thành tiếng — trả về **WAV**, không phải JSON:
+
+```bash
+curl -X POST http://127.0.0.1:5001/api3/speak -o out.wav \
+  -H 'Content-Type: application/json' \
+  -d '{"q":"Xin chào, đây là máy đọc chạy trên máy bạn.","lang":"vi","speed":1.0}'
 ```
 
 Dịch **mảng** trong một request nhanh hơn hẳn gọi từng câu:
@@ -100,7 +126,7 @@ Client mẫu không phụ thuộc thư viện ngoài: [`examples/`](examples/) �
 | | |
 |---|---|
 | **Chỉ loopback** | Cổng duy nhất cống bố là `127.0.0.1:5001`. Địa chỉ được **ghi cứng** trong `docker-compose.yml`, không lấy từ biến — một dòng trong `.env` không thể vô tình mở cả stack ra mạng |
-| **Một cửa duy nhất** | LibreTranslate và EnViT5 không cống bố cổng nào; chỉ tiếp cận được qua nginx |
+| **Một cửa duy nhất** | LibreTranslate, EnViT5 và máy đọc không công bố cổng nào; chỉ tiếp cận được qua nginx |
 | **Không CORS rộng** | LibreTranslate mặc định gửi `Access-Control-Allow-Origin: *` — nghĩa là *bất kỳ trang web nào bạn ghé cũng dùng được máy chủ dịch của bạn*. Header này bị gỡ ở proxy. Client của dự án không cần nó: giao diện web cùng origin, extension gọi từ service worker |
 | **Bề mặt tối thiểu** | Giao diện gốc của LibreTranslate bị tắt — đã có giao diện riêng, giữ nó chỉ thêm chỗ để tấn công |
 | **Container bị siết** | `cap_drop: ALL`, `no-new-privileges`, chạy dưới user không phải root, trần RAM |
@@ -113,8 +139,9 @@ Client mẫu không phụ thuộc thư viện ngoài: [`examples/`](examples/) �
 ## Kiểm thử
 
 ```bash
-./tests/run.sh          # 233 test
+./tests/run.sh          # 284 test
 ./tests/run.sh edge     # chỉ ca xấu / ca biên
+./tests/run.sh ttsui    # chỉ phần đọc thành tiếng, trong Brave thật
 ```
 
 Chỉ dùng `unittest` thư viện chuẩn và Node có sẵn — không cài gì thêm.
@@ -129,7 +156,7 @@ bộ test tĩnh xanh hết trong khi extension hỏng hoàn toàn ngoài đời.
 | | |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Thành phần, luồng dữ liệu, ranh giới các lớp |
-| [`docs/issues.md`](docs/issues.md) | **26 lỗi đã gặp: triệu chứng, nguyên nhân gốc, cách sửa** |
+| [`docs/issues.md`](docs/issues.md) | **31 lỗi đã gặp: triệu chứng, nguyên nhân gốc, cách sửa** |
 | [`docs/decisions.md`](docs/decisions.md) | Quyết định thiết kế và cái giá của chúng |
 | [`docs/testing.md`](docs/testing.md) | Chiến lược test, bẫy khi test trình duyệt |
 | [`docs/operations.md`](docs/operations.md) | Vận hành, xử lý sự cố |
@@ -149,6 +176,8 @@ Sửa `.env` rồi `sudo systemctl restart libretranslate`.
 | `LT_THREADS` | `4` | Số **worker gunicorn** — mỗi worker nạp model riêng, tăng là nhân RAM |
 | `OMP_NUM_THREADS` | `4` | Thread inference mỗi worker. Tổng tải = tích hai số này |
 | `ENGINE_MODEL_ID` | `VietAI/envit5-translation` | Đổi thì phải build lại engine |
+| `TTS_VOICES` | `vi_VN-vais1000-medium`, `en_US-amy-medium` | Giọng nướng vào image; đổi rồi `ltctl rebuild-tts` |
+| `TTS_MAX_CHARS` | `2000` | Chốt chặn độ dài mỗi lần đọc. **Quyết định RAM đỉnh** của `lt-tts` |
 
 ## Gỡ
 
@@ -163,6 +192,12 @@ Mã của dự án: MIT (xem [`LICENSE`](LICENSE)).
 
 Thành phần bên thứ ba giữ giấy phép riêng: LibreTranslate (AGPL-3.0),
 Argos Translate (MIT), [`VietAI/envit5-translation`](https://huggingface.co/VietAI/envit5-translation)
-(OpenRAIL), [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0), nginx (BSD-2-Clause).
+(OpenRAIL), [Piper](https://github.com/OHF-Voice/piper1-gpl) (**GPL-3.0-or-later**),
+giọng [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) (MIT),
+[pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0), nginx (BSD-2-Clause).
 
-Model dịch được tải khi chạy và **không** nằm trong repo này.
+LibreTranslate và Piper mang giấy phép copyleft. Cả hai chạy trong container
+riêng và chỉ giao tiếp với mã của dự án qua HTTP — không liên kết vào mã nguồn
+nào ở đây. Mã trong repo này vẫn là MIT.
+
+Model dịch và tệp giọng được tải lúc build/chạy và **không** nằm trong repo này.

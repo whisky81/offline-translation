@@ -58,7 +58,7 @@ select {
 .out { white-space: pre-wrap; overflow-wrap: anywhere; }
 .err { color: #c81e1e; }
 .foot {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 7px 12px; border-top: 1px solid #e5e7eb; font-size: 11.5px; opacity: .75;
 }
 .foot .grow { flex: 1; }
@@ -66,6 +66,9 @@ select {
   cursor: pointer; text-decoration: underline; background: none; border: 0;
   color: inherit; font: inherit; font-size: 11.5px; padding: 0;
 }
+/* Dang doc: bo gach chan, to dam, doi mau — de biet nut nao dang chay. */
+.copy.on { text-decoration: none; font-weight: 700; color: #2563eb; }
+@media (prefers-color-scheme: dark) { .copy.on { color: #5b8cff; } }
 .spin {
   width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent;
   border-radius: 50%; display: inline-block; animation: sp .7s linear infinite;
@@ -75,12 +78,20 @@ select {
 
   /** Quan ly toan bo phan nhin thay. Khong goi mang, khong doc vung boi den. */
   class Overlay {
-    constructor({ onTranslate, onTargetChange }) {
+    constructor({ onTranslate, onTargetChange, onSpeak, onStopSpeak }) {
       this.onTranslate = onTranslate;
       this.onTargetChange = onTargetChange;
+      this.onSpeak = onSpeak || (() => {});
+      this.onStopSpeak = onStopSpeak || (() => {});
       this.host = null; this.root = null; this.bubble = null; this.card = null;
       this.rect = null;
+      // null = chua hoi may doc; [] = co hoi va khong co giong nao.
+      this.ttsLangs = null;
+      this.reading = null;      // "src" | "out" khi dang doc
     }
+
+    /** Ngon ngu may doc phuc vu duoc. Goi mot lan luc khoi tao. */
+    setTtsLanguages(list) { this.ttsLangs = Array.isArray(list) ? list : []; }
 
     get element() { return this.host; }
 
@@ -177,6 +188,8 @@ select {
         </div>
         <div class="body"><div class="src"></div><div class="out"></div></div>
         <div class="foot"><span data-meta></span><span class="grow"></span>
+          <button class="copy" data-read="src" hidden>Đọc gốc</button>
+          <button class="copy" data-read="out" hidden>Đọc bản dịch</button>
           <button class="copy" data-copy>Chép</button></div>`;
       c.querySelector(".src").textContent = sourceText.slice(0, 300);
       c.querySelector(".out").textContent = res.text;
@@ -190,11 +203,56 @@ select {
         catch { e.target.textContent = "Không chép được"; }
       });
 
+      this.#wireRead(c, sourceText, res, target);
+
       const sel = c.querySelector("[data-lang]");
       for (const [code, name] of LANGS) sel.append(new Option(name, code));
       sel.value = target || "vi";
       sel.addEventListener("change", () => this.onTargetChange(sel.value, sourceText));
       this.#finish(c);
+    }
+
+    /** Hien nut Doc cho ben nao co giong. Ben khong co thi an han — mot nut
+     *  bam vao chi de bao "chua co giong" thi khong nen ton cho. */
+    #wireRead(c, sourceText, res, target) {
+      if (!this.ttsLangs?.length) return;
+      const base = (x) => (x || "").split("-")[0].toLowerCase();
+      const sides = [["src", sourceText, base(res.source || res.detected)],
+                     ["out", res.text, base(res.target || target)]];
+      for (const [which, text, lang] of sides) {
+        const btn = c.querySelector(`[data-read="${which}"]`);
+        if (!btn || !text?.trim() || !lang || !this.ttsLangs.includes(lang)) continue;
+        btn.hidden = false;
+        btn.title = `Giọng ${lang}`;
+        btn.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          if (this.reading === which) this.onStopSpeak();
+          else this.onSpeak(which, text, lang);
+        });
+      }
+    }
+
+    /** Bao loi doc ngay tren nut. Khong dung renderError: no se xoa mat ban
+     *  dich ma nguoi dung dang doc — mat nhieu hon duoc. */
+    setReadError(which, message) {
+      this.reading = null;
+      const btn = this.card?.querySelector(`[data-read="${which}"]`);
+      if (!btn) return;
+      btn.textContent = "Không đọc được";
+      btn.title = message || "";
+      btn.classList.remove("on");
+    }
+
+    /** Doi nhan nut theo ben dang doc. `which` = null nghia la da dung. */
+    setReading(which) {
+      this.reading = which;
+      if (!this.card) return;
+      for (const btn of this.card.querySelectorAll("[data-read]")) {
+        const mine = btn.dataset.read === which;
+        btn.textContent = mine ? "Dừng"
+          : btn.dataset.read === "src" ? "Đọc gốc" : "Đọc bản dịch";
+        btn.classList.toggle("on", mine);
+      }
     }
 
     renderError(message) {

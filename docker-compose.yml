@@ -99,6 +99,35 @@ services:
         max-size: "5m"
         max-file: "2"
 
+  # May doc (text-to-speech) dung Piper. Tuy chon: tat di thi UI tu an nut Doc.
+  #
+  # Vi sao can may chu rieng thay vi speechSynthesis cua trinh duyet: Chrome va
+  # Brave tren Linux khong kem giong nao, getVoices() tra ve mang rong.
+  tts:
+    build:
+      context: ./tts
+      args:
+        TTS_VOICES: ${TTS_VOICES:-vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium en/en_US/amy/medium/en_US-amy-medium}
+    image: ${TTS_IMAGE:-lt-tts-piper:1}
+    container_name: lt-tts
+    restart: "no"
+    # Khong cong bo cong ra host — chi tiep can qua nginx o :5001/api3.
+    expose:
+      - "8100"
+    environment:
+      TTS_MAX_CHARS: "${TTS_MAX_CHARS:-2000}"
+      TTS_CACHE_MB: "${TTS_CACHE_MB:-64}"
+    mem_limit: ${TTS_MEM_LIMIT:-2g}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   # UI tieng Viet rieng + proxy cung origin toi API.
   web:
     image: ${WEB_IMAGE:-nginx:1.29-alpine}
@@ -107,6 +136,7 @@ services:
     depends_on:
       - libretranslate
       - engine
+      - tts
     # Co dinh 127.0.0.1: khong de mot bien trong .env vo tinh mo ra ca mang.
     # Muon chia se trong LAN thi phai sua chinh tep nay — mot hanh dong co y thuc.
     ports:

@@ -30,7 +30,7 @@ mem_mb=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
 if [ "$mem_mb" -ge 4096 ]; then pass "RAM: ${mem_mb} MB"; else fail "RAM chi ${mem_mb} MB, nen co >= 4096 MB"; fi
 
 free_gb=$(df -BG --output=avail "$PROJECT_DIR" | tail -1 | tr -dc '0-9')
-if [ "${free_gb:-0}" -ge 5 ]; then pass "Dung luong trong: ${free_gb} GB"; else fail "Chi con ${free_gb} GB, can >= 5 GB (image ~600 MB + model)"; fi
+if [ "${free_gb:-0}" -ge 7 ]; then pass "Dung luong trong: ${free_gb} GB"; else fail "Chi con ${free_gb} GB, can >= 7 GB (image LibreTranslate + engine + may doc ~711 MB + model)"; fi
 
 echo
 echo "[Docker]"
